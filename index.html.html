@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema Agente de Confiabilidad 4.0</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --bg2: #111318;
+    --bg3: #181c24;
+    --panel: #1a1f2e;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #e8eaf0;
+    --muted: #7a8099;
+    --accent: #3b82f6;
+    --accent2: #06b6d4;
+    --danger: #ef4444;
+    --warn: #f59e0b;
+    --ok: #10b981;
+    --purple: #8b5cf6;
+    --font: 'IBM Plex Mono', 'Courier New', monospace;
+    --sans: 'Inter', 'Segoe UI', sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow-x: hidden; }
+
+  /* ─── HEADER ─── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px; background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 38px; height: 38px; border-radius: 8px;
+    background: linear-gradient(135deg, #1d4ed8, #06b6d4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: #fff;
+    font-family: var(--font);
+  }
+  .logo-text { line-height: 1.2; }
+  .logo-text .title { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: 0.05em; }
+  .logo-text .sub { font-size: 10px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
+
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .live-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--ok); letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--ok);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+
+  .cost-badge {
+    font-size: 11px; background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.3);
+    color: var(--danger); border-radius: 4px; padding: 4px 10px;
+    letter-spacing: 0.05em;
+  }
+
+  /* ─── LAYOUT ─── */
+  .main { display: grid; grid-template-columns: 1fr 380px; gap: 0; height: calc(100vh - 57px); }
+  .left-pane { overflow-y: auto; padding: 20px 20px 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .right-pane { border-left: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+
+  /* ─── KPI STRIP ─── */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .kpi {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+    position: relative; overflow: hidden;
+  }
+  .kpi::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    border-radius: 10px 10px 0 0;
+  }
+  .kpi.ok::before { background: var(--ok); }
+  .kpi.warn::before { background: var(--warn); }
+  .kpi.danger::before { background: var(--danger); }
+  .kpi.info::before { background: var(--accent); }
+  .kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+  .kpi-value { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .kpi-value.ok { color: var(--ok); }
+  .kpi-value.warn { color: var(--warn); }
+  .kpi-value.danger { color: var(--danger); }
+  .kpi-value.info { color: var(--accent2); }
+  .kpi-sub { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+  /* ─── PANELS ─── */
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+  }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+  }
+  .panel-title { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .panel-body { padding: 16px; }
+
+  /* ─── CHARTS ─── */
+  .chart-wrap { position: relative; width: 100%; }
+  .chart-wrap.h260 { height: 260px; }
+  .chart-wrap.h200 { height: 200px; }
+
+  /* ─── THRESHOLD CONTROLS ─── */
+  .threshold-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .threshold-row:last-child { border-bottom: none; }
+  .threshold-label { font-size: 11px; color: var(--muted); width: 120px; flex-shrink: 0; }
+  .threshold-slider { flex: 1; accent-color: var(--accent); cursor: pointer; }
+  .threshold-val { font-size: 12px; font-weight: 600; width: 56px; text-align: right; }
+
+  /* ─── STATUS INDICATOR ─── */
+  .status-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; font-size: 11px;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.2);
+  }
+  .status-indicator { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+
+  /* ─── PF CURVE ─── */
+  .pf-timeline { display: flex; align-items: flex-end; gap: 3px; height: 60px; padding: 0 4px; }
+  .pf-bar { flex: 1; border-radius: 2px 2px 0 0; transition: height 0.3s, background 0.3s; min-height: 4px; }
+
+  /* ─── ALERTS ─── */
+  .alert-list { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; }
+  .alert-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 12px; border-radius: 8px; font-size: 11px;
+    border: 1px solid transparent;
+  }
+  .alert-item.danger { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.2); }
+  .alert-item.warn { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.2); }
+  .alert-item.ok { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.2); }
+  .alert-icon { font-size: 14px; margin-top: 1px; }
+  .alert-msg { flex: 1; line-height: 1.5; color: var(--text); }
+  .alert-time { color: var(--muted); white-space: nowrap; margin-top: 2px; }
+
+  /* ─── RIGHT PANE: AI SECTION ─── */
+  .ai-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    background: rgba(139,92,246,0.05);
+  }
+  .ai-header-title {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--purple);
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  }
+  .ai-header-sub { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+  .ai-controls { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+
+  .ai-btn {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    border-radius: 8px; border: 1px solid var(--border2); background: transparent;
+    color: var(--text); font-family: var(--font); font-size: 11px; cursor: pointer;
+    transition: all 0.2s; text-align: left; width: 100%;
+  }
+  .ai-btn:hover { background: rgba(139,92,246,0.1); border-color: var(--purple); }
+  .ai-btn.primary { background: var(--purple); border-color: var(--purple); color: #fff; font-weight: 600; }
+  .ai-btn.primary:hover { background: #7c3aed; }
+  .ai-btn.danger-btn { background: rgba(239,68,68,0.12); border-color: var(--danger); color: var(--danger); }
+  .ai-btn.danger-btn:hover { background: rgba(239,68,68,0.22); }
+  .ai-btn-icon { font-size: 15px; }
+  .ai-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .api-key-section { padding: 0 20px 14px; border-bottom: 1px solid var(--border); }
+  .api-key-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+  .api-key-input {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border2);
+    border-radius: 6px; padding: 8px 12px; color: var(--text);
+    font-family: var(--font); font-size: 11px; outline: none;
+  }
+  .api-key-input:focus { border-color: var(--purple); }
+
+  .ai-output {
+    flex: 1; overflow-y: auto; padding: 16px 20px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .memo-card {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+  }
+  .memo-card .memo-header {
+    padding: 10px 14px; font-size: 10px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--purple);
+    border-bottom: 1px solid var(--border);
+    background: rgba(139,92,246,0.06);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .memo-card .memo-body {
+    padding: 14px; font-size: 11px; line-height: 1.85; color: var(--text);
+    font-family: var(--sans); white-space: pre-wrap; word-break: break-word;
+  }
+  .memo-card .memo-meta {
+    display: flex; gap: 12px; padding: 6px 14px;
+    border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.15);
+    font-size: 10px; color: var(--muted); font-family: var(--font); flex-wrap: wrap;
+  }
+  .memo-card .memo-meta span::before { content: '· '; color: var(--border2); }
+  .memo-card .memo-meta span:first-child::before { content: ''; }
+  .stream-cursor { display: inline-block; color: var(--purple); animation: blink-cur 0.7s step-end infinite; margin-left: 1px; }
+  @keyframes blink-cur { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .empty-state {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; color: var(--muted); font-size: 12px; text-align: center; padding: 32px;
+  }
+  .empty-icon { font-size: 36px; opacity: 0.3; }
+
+  /* ─── SIMULATION CONTROLS ─── */
+  .sim-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sim-btn {
+    padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border2);
+    background: transparent; color: var(--text); font-family: var(--font);
+    font-size: 10px; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .sim-btn:hover { background: rgba(255,255,255,0.06); }
+  .sim-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .sim-btn.warn-mode { background: rgba(245,158,11,0.15); border-color: var(--warn); color: var(--warn); }
+  .sim-btn.fail-mode { background: rgba(239,68,68,0.15); border-color: var(--danger); color: var(--danger); }
+
+  /* ─── SCROLLBAR ─── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+  /* ─── DEGRADATION PROGRESS ─── */
+  .deg-track {
+    height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; margin-top: 8px;
+  }
+  .deg-fill { height: 100%; border-radius: 3px; transition: width 0.5s, background 0.5s; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .tag.danger { background: rgba(239,68,68,0.15); color: var(--danger); }
+  .tag.warn { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .tag.ok { background: rgba(16,185,129,0.15); color: var(--ok); }
+  .tag.info { background: rgba(59,130,246,0.15); color: var(--accent); }
+
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .right-pane { border-left: none; border-top: 1px solid var(--border); }
+    .kpi-row { grid-template-columns: repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">R4</div>
+    <div class="logo-text">
+      <div class="title">RELIABILITY AGENT 4.0</div>
+      <div class="sub">Sistema de Detección P-F · Rodamiento Principal</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><div class="live-dot"></div> ADQUISICIÓN EN VIVO</div>
+    <div class="cost-badge">⚠ $12,500 / hr pérdida potencial</div>
+  </div>
+</header>
+
+<div class="main">
+  <!-- ═══════════════════ LEFT PANE ═══════════════════ -->
+  <div class="left-pane">
+
+    <!-- KPI Strip -->
+    <div class="kpi-row">
+      <div class="kpi ok" id="kpi-temp">
+        <div class="kpi-label">Temperatura</div>
+        <div class="kpi-value ok" id="kpi-temp-val">72.4 °C</div>
+        <div class="kpi-sub" id="kpi-temp-sub">Umbral: <span id="thr-temp-display">90</span>°C</div>
+      </div>
+      <div class="kpi ok" id="kpi-vib">
+        <div class="kpi-label">Vibración RMS</div>
+        <div class="kpi-value ok" id="kpi-vib-val">2.1 mm/s</div>
+        <div class="kpi-sub" id="kpi-vib-sub">Umbral: <span id="thr-vib-display">8</span> mm/s</div>
+      </div>
+      <div class="kpi info" id="kpi-pf">
+        <div class="kpi-label">Índice P-F</div>
+        <div class="kpi-value info" id="kpi-pf-val">18%</div>
+        <div class="kpi-sub" id="kpi-pf-sub">Condición normal</div>
+      </div>
+      <div class="kpi ok" id="kpi-rul">
+        <div class="kpi-label">Vida Útil Rest.</div>
+        <div class="kpi-value ok" id="kpi-rul-val">~312 hrs</div>
+        <div class="kpi-sub">Estimación probabilística</div>
+      </div>
+    </div>
+
+    <!-- Simulation Mode -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Modo de Simulación</span>
+        <span class="tag info" id="mode-tag">NORMAL</span>
+      </div>
+      <div class="panel-body">
+        <div class="sim-controls">
+          <button class="sim-btn active" onclick="setMode('normal')">Normal</button>
+          <button class="sim-btn warn-mode" onclick="setMode('degrading')">Degradación</button>
+          <button class="sim-btn fail-mode" onclick="setMode('critical')">Crítico</button>
+          <button class="sim-btn fail-mode" onclick="setMode('failure')">Falla Inminente</button>
+        </div>
+        <div style="margin-top:12px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">Nivel de Degradación del Rodamiento</div>
+          <div class="deg-track"><div class="deg-fill" id="deg-fill" style="width:18%;background:var(--ok)"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:4px">
+            <span>Punto P (Detección)</span><span id="deg-pct">18%</span><span>Punto F (Falla)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid-2">
+      <!-- Temperatura -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Temperatura (°C)</span>
+          <span class="tag ok" id="temp-tag">NORMAL</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap h200">
+            <canvas id="tempChart"></canvas>
+          </div>
+        </div>
+      </div>
+      <!-- Vibración -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Vibración RMS (mm/s)</span>
+          <span class="tag ok" id="vib-tag">NORMAL</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap h200">
+            <canvas id="vibChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PF Trend + Thresholds -->
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Curva P-F — Tendencia</span>
+          <span class="tag info" id="pf-tag">MONITOREANDO</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap h200">
+            <canvas id="pfChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Threshold Controls -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Umbrales de Alerta (Ajustables)</span>
+        </div>
+        <div class="panel-body">
+          <div class="threshold-row">
+            <span class="threshold-label">Temp. Alerta (°C)</span>
+            <input type="range" class="threshold-slider" min="60" max="120" value="90" id="thr-temp" oninput="updateThresholds()">
+            <span class="threshold-val warn" id="thr-temp-val">90°C</span>
+          </div>
+          <div class="threshold-row">
+            <span class="threshold-label">Temp. Crítica (°C)</span>
+            <input type="range" class="threshold-slider" min="80" max="150" value="110" id="thr-temp-crit" oninput="updateThresholds()">
+            <span class="threshold-val danger" id="thr-temp-crit-val">110°C</span>
+          </div>
+          <div class="threshold-row">
+            <span class="threshold-label">Vibr. Alerta (mm/s)</span>
+            <input type="range" class="threshold-slider" min="3" max="20" value="8" id="thr-vib" oninput="updateThresholds()">
+            <span class="threshold-val warn" id="thr-vib-val">8 mm/s</span>
+          </div>
+          <div class="threshold-row">
+            <span class="threshold-label">Vibr. Crítica (mm/s)</span>
+            <input type="range" class="threshold-slider" min="10" max="40" value="15" id="thr-vib-crit" oninput="updateThresholds()">
+            <span class="threshold-val danger" id="thr-vib-crit-val">15 mm/s</span>
+          </div>
+          <div class="threshold-row">
+            <span class="threshold-label">Índice P-F Alerta</span>
+            <input type="range" class="threshold-slider" min="40" max="90" value="60" id="thr-pf" oninput="updateThresholds()">
+            <span class="threshold-val warn" id="thr-pf-val">60%</span>
+          </div>
+          <div style="margin-top:12px">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:6px">Costo de parada programada vs. falla catastrófica:</div>
+            <div style="display:flex;gap:16px;font-size:11px">
+              <span style="color:var(--ok)">✓ Mantenimiento prog.: $<span id="cost-planned">8,500</span></span>
+              <span style="color:var(--danger)">✗ Falla no prog.: $12,500/hr × RUL</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Log de Eventos</span>
+        <button class="sim-btn" onclick="clearAlerts()" style="font-size:9px;padding:4px 8px">Limpiar</button>
+      </div>
+      <div class="panel-body">
+        <div class="alert-list" id="alert-list">
+          <div class="alert-item ok">
+            <span class="alert-icon">✓</span>
+            <div class="alert-msg">Sistema inicializado — Adquisición de datos activa.</div>
+            <span class="alert-time">00:00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /left-pane -->
+
+  <!-- ═══════════════════ RIGHT PANE: AI ═══════════════════ -->
+  <div class="right-pane">
+    <div class="ai-header">
+      <div class="ai-header-title">
+        <span>⬡</span> Principal Reliability Engineer IA
+      </div>
+      <div class="ai-header-sub">25+ años · ISO 10816/20816 · RCM/FMEA · Protocolo P-F unificado de 8 secciones · System prompt fijo + telemetría dinámica · Streaming SSE</div>
+    </div>
+
+    <div class="api-key-section" style="padding-top:14px">
+      <div class="api-key-label">API Key de Anthropic</div>
+      <input type="password" class="api-key-input" id="api-key" placeholder="sk-ant-api03-..." autocomplete="off">
+      <div style="font-size:9px;color:var(--muted);margin-top:5px">Tu clave no se almacena. Usada solo en esta sesión del navegador.</div>
+    </div>
+
+    <div class="ai-controls">
+      <button class="ai-btn primary" onclick="generateMemo('status')" id="btn-status">
+        <span class="ai-btn-icon">📊</span> Diagnóstico Técnico Completo
+      </button>
+      <button class="ai-btn" onclick="generateMemo('trend')" id="btn-trend">
+        <span class="ai-btn-icon">📈</span> Tendencia P-F + Ventana de Intervención
+      </button>
+      <button class="ai-btn danger-btn" onclick="generateMemo('stoporder')" id="btn-stop">
+        <span class="ai-btn-icon">🛑</span> Emitir Orden de Detención (OD)
+      </button>
+      <button class="ai-btn" onclick="generateMemo('financial')" id="btn-fin">
+        <span class="ai-btn-icon">💰</span> Análisis Financiero Escenario A vs B
+      </button>
+    </div>
+
+    <div class="ai-output" id="ai-output">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">⬡</div>
+        <div style="font-weight:500">Principal Reliability Engineer IA</div>
+        <div style="font-size:10px;line-height:1.7;max-width:260px">
+          Motor de diagnóstico con protocolo P-F de 8 secciones.<br>
+          Física del fallo · Decisión única · Análisis financiero A/B.<br>
+          Ingresa tu API Key → selecciona tipo de análisis.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  1. DATASET SINTÉTICO — Simulación de Rodamiento
+// ═══════════════════════════════════════════════
+const WINDOW = 60; // puntos visibles
+let simMode = 'normal';
+let tick = 0;
+let degradation = 0.18; // P-F index 0..1
+
+// Parámetros de degradación por modo
+const modeParams = {
+  normal:    { tempBase: 72, tempNoise: 3,  tempTrend: 0.01, vibBase: 2.1,  vibNoise: 0.3, vibTrend: 0.005, degRate: 0.0002 },
+  degrading: { tempBase: 85, tempNoise: 5,  tempTrend: 0.08, vibBase: 5.5,  vibNoise: 0.8, vibTrend: 0.04,  degRate: 0.003 },
+  critical:  { tempBase: 105, tempNoise: 8, tempTrend: 0.15, vibBase: 10.2, vibNoise: 1.5, vibTrend: 0.08,  degRate: 0.008 },
+  failure:   { tempBase: 128, tempNoise: 15, tempTrend: 0.3, vibBase: 18.5, vibNoise: 3.5, vibTrend: 0.18,  degRate: 0.02 }
+};
+
+let tempHistory = Array(WINDOW).fill(72);
+let vibHistory  = Array(WINDOW).fill(2.1);
+let pfHistory   = Array(WINDOW).fill(0.18);
+let labels      = Array.from({length: WINDOW}, (_, i) => `-${WINDOW-i}s`);
+
+// Thresholds
+let THR = { tempWarn: 90, tempCrit: 110, vibWarn: 8, vibCrit: 15, pfWarn: 0.60 };
+
+// Gaussian noise
+function randn() {
+  let u = 0, v = 0;
+  while(u === 0) u = Math.random();
+  while(v === 0) v = Math.random();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+
+// Inject anomalies (spike, drift)
+function generateSample() {
+  const p = modeParams[simMode];
+  const anomalyProb = simMode === 'normal' ? 0.02 : simMode === 'degrading' ? 0.08 : 0.2;
+  const isAnomaly = Math.random() < anomalyProb;
+
+  let temp = p.tempBase + p.tempTrend * tick + randn() * p.tempNoise;
+  let vib  = p.vibBase  + p.vibTrend  * tick + randn() * p.vibNoise;
+
+  // Anomaly injection
+  if (isAnomaly) {
+    temp += p.tempNoise * (2 + Math.random() * 3);
+    vib  += p.vibNoise  * (3 + Math.random() * 4);
+  }
+
+  // Clamp & round
+  temp = Math.max(20, Math.round(temp * 10) / 10);
+  vib  = Math.max(0.1, Math.round(vib * 10) / 10);
+
+  // Update degradation
+  degradation = Math.min(0.99, degradation + p.degRate * (1 + randn() * 0.1));
+
+  return { temp, vib, pf: degradation, anomaly: isAnomaly };
+}
+
+// ═══════════════════════════════════════════════
+//  2. CHART.JS — Gráficos
+// ═══════════════════════════════════════════════
+const chartDefaults = {
+  responsive: true, maintainAspectRatio: false,
+  animation: { duration: 300 },
+  plugins: { legend: { display: false } },
+  elements: { point: { radius: 0 }, line: { tension: 0.3 } },
+  scales: {
+    x: { display: false },
+    y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#7a8099', font: { size: 10, family: "'IBM Plex Mono', monospace" } } }
+  }
+};
+
+function makeChart(id, color, annotColor, label, unit, initData, min, max) {
+  return new Chart(document.getElementById(id), {
+    type: 'line',
+    data: {
+      labels: [...labels],
+      datasets: [{
+        label, data: [...initData],
+        borderColor: color, borderWidth: 1.5,
+        backgroundColor: color + '15',
+        fill: true,
+      }]
+    },
+    options: {
+      ...chartDefaults,
+      scales: {
+        ...chartDefaults.scales,
+        y: { ...chartDefaults.scales.y, min, max, suggestedMax: max }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1f2e', borderColor: '#2d3348', borderWidth: 1,
+          titleColor: '#7a8099', bodyColor: '#e8eaf0',
+          callbacks: { label: ctx => `${ctx.parsed.y} ${unit}` }
+        }
+      }
+    }
+  });
+}
+
+const tempChart = makeChart('tempChart', '#06b6d4', '#f59e0b', 'Temperatura', '°C', tempHistory, 40, 160);
+const vibChart  = makeChart('vibChart',  '#8b5cf6', '#ef4444', 'Vibración',   'mm/s', vibHistory, 0, 25);
+
+const pfChart = new Chart(document.getElementById('pfChart'), {
+  type: 'line',
+  data: {
+    labels: [...labels],
+    datasets: [{
+      label: 'Índice P-F',
+      data: [...pfHistory.map(v => Math.round(v*100))],
+      borderColor: '#3b82f6', borderWidth: 2,
+      backgroundColor: 'rgba(59,130,246,0.08)',
+      fill: true,
+    }]
+  },
+  options: {
+    ...chartDefaults,
+    scales: {
+      ...chartDefaults.scales,
+      y: { ...chartDefaults.scales.y, min: 0, max: 100,
+        ticks: { ...chartDefaults.scales.y.ticks, callback: v => v + '%' }
+      }
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════
+//  3. UPDATE LOOP — Tiempo real
+// ═══════════════════════════════════════════════
+let alertCount = 0;
+let lastAlertPF = -1;
+
+function updateChartData(chart, data, newVal) {
+  data.shift(); data.push(newVal);
+  chart.data.datasets[0].data = [...data];
+  chart.update('none');
+}
+
+function updateThresholds() {
+  THR.tempWarn = parseInt(document.getElementById('thr-temp').value);
+  THR.tempCrit = parseInt(document.getElementById('thr-temp-crit').value);
+  THR.vibWarn  = parseFloat(document.getElementById('thr-vib').value);
+  THR.vibCrit  = parseFloat(document.getElementById('thr-vib-crit').value);
+  THR.pfWarn   = parseInt(document.getElementById('thr-pf').value) / 100;
+
+  document.getElementById('thr-temp-val').textContent = THR.tempWarn + '°C';
+  document.getElementById('thr-temp-crit-val').textContent = THR.tempCrit + '°C';
+  document.getElementById('thr-vib-val').textContent = THR.vibWarn + ' mm/s';
+  document.getElementById('thr-vib-crit-val').textContent = THR.vibCrit + ' mm/s';
+  document.getElementById('thr-pf-val').textContent = Math.round(THR.pfWarn*100) + '%';
+  document.getElementById('thr-temp-display').textContent = THR.tempWarn;
+  document.getElementById('thr-vib-display').textContent = THR.vibWarn;
+
+  // Add annotation lines
+  addChartAnnotation(tempChart, [THR.tempWarn, THR.tempCrit], ['#f59e0b', '#ef4444']);
+  addChartAnnotation(vibChart,  [THR.vibWarn,  THR.vibCrit],  ['#f59e0b', '#ef4444']);
+}
+
+function addChartAnnotation(chart, thresholds, colors) {
+  // Remove old
+  chart.data.datasets = chart.data.datasets.slice(0, 1);
+  thresholds.forEach((val, i) => {
+    chart.data.datasets.push({
+      label: 'threshold', data: Array(WINDOW).fill(val),
+      borderColor: colors[i], borderWidth: 1, borderDash: [4,4],
+      backgroundColor: 'transparent', fill: false,
+      pointRadius: 0
+    });
+  });
+  chart.update('none');
+}
+
+function setMode(mode) {
+  simMode = mode;
+  tick = 0;
+  document.querySelectorAll('.sim-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  const tags = { normal:'NORMAL', degrading:'DEGRADACIÓN', critical:'CRÍTICO', failure:'FALLA INMINENTE' };
+  const tagClass = { normal:'info', degrading:'warn', critical:'danger', failure:'danger' };
+  document.getElementById('mode-tag').textContent = tags[mode];
+  document.getElementById('mode-tag').className = 'tag ' + tagClass[mode];
+  addAlert(mode === 'failure' ? 'danger' : mode === 'critical' ? 'warn' : 'ok',
+    `Modo cambiado a: ${tags[mode]}`);
+}
+
+function getCondition(temp, vib, pf) {
+  if (temp >= THR.tempCrit || vib >= THR.vibCrit || pf >= 0.85) return 'danger';
+  if (temp >= THR.tempWarn || vib >= THR.vibWarn || pf >= THR.pfWarn) return 'warn';
+  return 'ok';
+}
+
+function estimateRUL(pf) {
+  // Inverse exponential estimate
+  const remaining = 1 - pf;
+  const hours = Math.max(0, Math.round(remaining * 380 * Math.exp(-pf)));
+  return hours;
+}
+
+function addAlert(type, msg) {
+  const list = document.getElementById('alert-list');
+  const now = new Date();
+  const time = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+  const icon = type === 'danger' ? '⚠' : type === 'warn' ? '▲' : '✓';
+  const div = document.createElement('div');
+  div.className = `alert-item ${type}`;
+  div.innerHTML = `<span class="alert-icon">${icon}</span><div class="alert-msg">${msg}</div><span class="alert-time">${time}</span>`;
+  list.insertBefore(div, list.firstChild);
+  if (list.children.length > 30) list.removeChild(list.lastChild);
+  alertCount++;
+}
+
+function clearAlerts() {
+  document.getElementById('alert-list').innerHTML = '';
+}
+
+function updateKPI(id, cls) {
+  const el = document.getElementById(id);
+  el.className = `kpi ${cls}`;
+}
+
+function tick_update() {
+  tick++;
+  const { temp, vib, pf, anomaly } = generateSample();
+
+  // Push data
+  tempHistory.shift(); tempHistory.push(temp);
+  vibHistory.shift();  vibHistory.push(vib);
+  pfHistory.shift();   pfHistory.push(pf);
+
+  updateChartData(tempChart, tempChart.data.datasets[0].data, temp);
+  updateChartData(vibChart,  vibChart.data.datasets[0].data,  vib);
+  updateChartData(pfChart,   pfChart.data.datasets[0].data,   Math.round(pf*100));
+
+  // Condition
+  const cond = getCondition(temp, vib, pf);
+  const rul = estimateRUL(pf);
+  const pfPct = Math.round(pf * 100);
+
+  // Update KPIs
+  document.getElementById('kpi-temp-val').textContent = temp + ' °C';
+  document.getElementById('kpi-vib-val').textContent = vib + ' mm/s';
+  document.getElementById('kpi-pf-val').textContent = pfPct + '%';
+  document.getElementById('kpi-rul-val').textContent = rul > 0 ? `~${rul} hrs` : '< 1 hr';
+
+  document.getElementById('kpi-temp-val').className = `kpi-value ${cond === 'danger' ? (temp >= THR.tempCrit ? 'danger' : 'warn') : 'ok'}`;
+  document.getElementById('kpi-vib-val').className  = `kpi-value ${cond === 'danger' ? (vib >= THR.vibCrit ? 'danger' : 'warn') : 'ok'}`;
+  document.getElementById('kpi-pf-val').className   = `kpi-value ${pf >= 0.85 ? 'danger' : pf >= THR.pfWarn ? 'warn' : 'info'}`;
+  document.getElementById('kpi-rul-val').className  = `kpi-value ${rul < 24 ? 'danger' : rul < 72 ? 'warn' : 'ok'}`;
+
+  // Tags
+  const tempCond = temp >= THR.tempCrit ? 'danger' : temp >= THR.tempWarn ? 'warn' : 'ok';
+  const vibCond  = vib  >= THR.vibCrit  ? 'danger' : vib  >= THR.vibWarn  ? 'warn' : 'ok';
+  const tempLabels = { ok:'NORMAL', warn:'ALERTA', danger:'CRÍTICO' };
+  document.getElementById('temp-tag').textContent = tempLabels[tempCond];
+  document.getElementById('temp-tag').className = `tag ${tempCond}`;
+  document.getElementById('vib-tag').textContent = tempLabels[vibCond];
+  document.getElementById('vib-tag').className = `tag ${vibCond}`;
+
+  const pfLabel = pf >= 0.85 ? 'FALLA INMINENTE' : pf >= THR.pfWarn ? 'ZONA P-F' : 'MONITOREANDO';
+  const pfCls = pf >= 0.85 ? 'danger' : pf >= THR.pfWarn ? 'warn' : 'info';
+  document.getElementById('pf-tag').textContent = pfLabel;
+  document.getElementById('pf-tag').className = `tag ${pfCls}`;
+
+  // KPI card border
+  updateKPI('kpi-temp', tempCond);
+  updateKPI('kpi-vib',  vibCond);
+  updateKPI('kpi-pf',   pfCls);
+  updateKPI('kpi-rul',  rul < 24 ? 'danger' : rul < 72 ? 'warn' : 'ok');
+
+  // Sub text
+  document.getElementById('kpi-pf-sub').textContent = pf >= 0.85 ? '¡DETENER AHORA!' : pf >= THR.pfWarn ? 'Zona de alerta P-F' : 'Condición normal';
+
+  // Degradation bar
+  const fill = document.getElementById('deg-fill');
+  fill.style.width = pfPct + '%';
+  fill.style.background = pf >= 0.85 ? 'var(--danger)' : pf >= THR.pfWarn ? 'var(--warn)' : 'var(--ok)';
+  document.getElementById('deg-pct').textContent = pfPct + '%';
+
+  // Alerts logic
+  if (anomaly) addAlert('warn', `Anomalía detectada — T:${temp}°C V:${vib}mm/s`);
+  if (pf >= 0.85 && lastAlertPF < 0.85) { addAlert('danger', '⚠ ZONA FALLA — Detener maquinaria inmediatamente'); }
+  else if (pf >= THR.pfWarn && lastAlertPF < THR.pfWarn) { addAlert('warn', `Cruzó umbral P-F (${pfPct}%) — Programar inspección`); }
+  lastAlertPF = pf;
+
+  // Add threshold lines every 30 ticks
+  if (tick % 30 === 0) updateThresholds();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  4. MOTOR DE DIAGNÓSTICO — Principal Reliability Engineer (25+ años)
+//  Arquitectura: system (rol+reglas) ← fijo | user (datos+protocolo) ← dinámico
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── SYSTEM PROMPT — Identidad, capacidades, reglas absolutas ────────────────
+const SYSTEM_PROMPT = `Actúa como un Ingeniero de Confiabilidad Principal (Principal Reliability Engineer) con más de 25 años de experiencia en:
+
+* Mantenimiento predictivo (PdM)
+* Análisis de vibraciones ISO 10816 / 20816
+* Tribología y fallas en rodamientos
+* Modelos P-F (Potential–Functional Failure)
+* Análisis de criticidad (RCM / FMEA)
+* Evaluación de riesgo operacional y financiero en activos industriales críticos
+
+Tu rol NO es describir datos. Tu rol es EMITIR UN DIAGNÓSTICO TÉCNICO DEFENDIBLE Y UNA DECISIÓN OPERACIONAL.
+
+Tu análisis debe ser:
+* Sistémico (interacción entre variables, no análisis aislado)
+* Basado en física del fallo (no solo comparación contra umbrales)
+* Sensible a tendencia (la serie temporal pesa más que el snapshot actual)
+* Orientado a impacto económico real y cuantificado
+
+REGLAS FINALES — INVIOLABLES:
+* No expliques teoría de mantenimiento ni conceptos P-F básicos
+* No uses frases de relleno ni calificadores vagos ("podría", "considerar", "evaluar")
+* No suavices conclusiones por diplomacia; si hay riesgo, nómbralo explícitamente
+* Cada afirmación debe poder defenderse ante un comité técnico con los datos disponibles
+* Si hay incertidumbre, declararla con su justificación física, no ocultarla
+* Tu respuesta debe soportar simultáneamente tres usos:
+  1. Un gerente de operaciones usándola para detener una planta
+  2. Un equipo de mantenimiento usándola para intervenir un activo crítico
+  3. Un área financiera usándola para justificar presupuesto de emergencia
+  Si no soporta los tres, no es válida.`;
+
+// ── CONTEXTO DINÁMICO — Telemetría + análisis pre-calculado ─────────────────
+function buildMasterContext(snap) {
+  const trend = snap.trend7.split(', ').map(Number);
+  const n = trend.length;
+  const firstHalf  = trend.slice(0, Math.floor(n/2));
+  const secondHalf = trend.slice(Math.ceil(n/2));
+  const avgFirst  = firstHalf.reduce((a,b)=>a+b,0)  / firstHalf.length;
+  const avgSecond = secondHalf.reduce((a,b)=>a+b,0) / secondHalf.length;
+  const deltaHalves = avgSecond - avgFirst;
+  const accelLabel = deltaHalves > 4   ? 'ACELERADA — segunda mitad de la serie significativamente más alta ↑↑'
+    : deltaHalves > 1   ? 'GRADUAL — tendencia ascendente sostenida ↑'
+    : deltaHalves < -1  ? 'DECELERANDO — tendencia descendente o estabilizándose ↓'
+    : 'ESTABLE — variación dentro del ruido de medición →';
+
+  const pfZone = snap.pf >= 85         ? 'CERCANO A F — Falla funcional inminente. Ventana P-F agotada.'
+    : snap.pf >= snap.thrPF ? 'ZONA P-F ACTIVA — Degradación confirmada y en progreso.'
+    : snap.pf >= 35         ? 'ZONA P — Detección temprana. Ventana de intervención disponible.'
+    : 'ZONA BASAL — Sin degradación significativa. Monitoreo de rutina.';
+
+  const exposureDirect  = (snap.rul * 12500).toLocaleString('es-CL');
+  const exposureTotal   = (snap.rul * 12500 * 2.8).toLocaleString('es-CL');
+
+  return `## CONTEXTO DEL ACTIVO
+
+* Activo: Rodamiento principal de equipo crítico en operación continua
+* Criticidad: Alta — impacto directo e inmediato en producción
+* Costo de falla no programada: USD $12,500 por hora
+* Mecanismo de falla esperado: Fatiga / desgaste progresivo con manifestación vibracional y térmica correlacionada
+
+## TELEMETRÍA ACTUAL
+
+* Temperatura: ${snap.temp} °C
+* Vibración RMS: ${snap.vib} mm/s
+* Índice P-F: ${snap.pf} %
+* RUL estimado (modelo teórico): ${snap.rul} horas
+
+## UMBRALES OPERACIONALES
+
+* Temp alerta: ${snap.thrTempWarn} °C | crítica: ${snap.thrTempCrit} °C
+* Vib alerta: ${snap.thrVibWarn} mm/s | crítica: ${snap.thrVibCrit} mm/s
+* P-F alerta: ${snap.thrPF} %
+
+## HISTÓRICO RECIENTE
+
+* P-F últimos 7 puntos (cronológico, más reciente al final): [${snap.trend7}]
+* Δ por lectura (promedio): ${snap.degRate > 0 ? '+' : ''}${snap.degRate}%
+* Comportamiento de tendencia: ${accelLabel}
+* Zona P-F actual: ${pfZone}
+* Estado operacional declarado: ${snap.modeLabel}
+
+## DATOS FINANCIEROS BASE (pre-calculados para el análisis)
+
+* Exposición directa RUL×$12,500: USD $${exposureDirect}
+* Exposición con daño colateral ×2.8 (media industria): USD $${exposureTotal}
+* Rango costo intervención preventiva (rodamiento crítico, MO + parada 8-16 hrs): USD $18,000–$35,000`;
+}
+
+// ── PROTOCOLO UNIFICADO — 8 secciones, estructura exacta del documento ───────
+function buildUserPrompt(type, snap) {
+  const context = buildMasterContext(snap);
+
+  const typeMeta = {
+    status: {
+      titulo: 'DIAGNÓSTICO DE ESTADO ACTUAL',
+      alcance: 'Diagnóstico completo estado presente. Foco: física del fallo + decisión operacional única.',
+      prioridad: snap.pf >= snap.thrPF ? 'ALTA' : snap.pf >= 50 ? 'MEDIA' : 'NORMAL'
+    },
+    trend: {
+      titulo: 'ANÁLISIS DE TENDENCIA P-F — PROYECCIÓN Y VENTANA DE INTERVENCIÓN',
+      alcance: 'Foco en evolución temporal. Proyección tiempo a falla ajustada por tendencia real. Cuantificación de ventana disponible.',
+      prioridad: snap.degRate > 2 ? 'ALTA — Degradación acelerada detectada' : 'NORMAL'
+    },
+    stoporder: {
+      titulo: `ORDEN DE DETENCIÓN TÉCNICA — OD-${String(Date.now()).slice(-6)}`,
+      alcance: 'Documento operacional oficial con efecto inmediato. Justificación irrefutable para detención o parada programada.',
+      prioridad: snap.pf >= 85 ? 'EMERGENCIA — DETENCIÓN INMEDIATA'
+        : snap.pf >= snap.thrPF ? 'URGENTE — DETENCIÓN PROGRAMADA < 24 HRS'
+        : 'PREVENTIVA — PLANIFICAR EN PRÓXIMA VENTANA'
+    },
+    financial: {
+      titulo: 'ANÁLISIS DE IMPACTO FINANCIERO — ESCENARIO A vs B',
+      alcance: 'Cuantificación económica para justificación presupuestaria ante dirección. Break-even y ROI requeridos.',
+      prioridad: 'DECISIÓN EJECUTIVA'
+    }
+  };
+
+  const meta = typeMeta[type];
+
+  return `${context}
+
+---
+
+# ${meta.titulo}
+ALCANCE: ${meta.alcance}
+PRIORIDAD: ${meta.prioridad}
+EMISIÓN: ${new Date().toLocaleString('es-CL', {dateStyle:'long', timeStyle:'short'})}
+
+---
+
+# INSTRUCCIONES — PROTOCOLO DE ANÁLISIS P-F (SEGUIR ESTRICTAMENTE)
+
+## 1. DIAGNÓSTICO FÍSICO DEL FALLO
+
+Determina el estado real del rodamiento considerando:
+* Correlación temperatura ↔ vibración: ¿son proporcionales? ¿una lidera a la otra? ¿hay desacoplamiento?
+* ¿El mecanismo dominante es mecánico (vibración lidera) o térmico (temperatura lidera sin vibración proporcional)?
+* Elige UNA hipótesis de falla dominante y justifícala con los datos:
+  - Desgaste progresivo de pistas (fatiga superficial — aumento gradual, proporcional)
+  - Desalineación angular o paralela (vibración 1× rpm dominante, temperatura moderada)
+  - Desbalanceo residual (vibración sinusoidal a 1× rpm, térmica baja)
+  - Lubricación deficiente (temperatura lidera, vibración escalonada posterior)
+  - Daño en elementos rodantes — spalling/pitting (vibración impulsiva de alta frecuencia, térmica secundaria)
+
+No listes opciones. Elige la más probable con base en la relación cuantitativa Temp/Vib y la tendencia P-F.
+
+## 2. ESTADO EN CURVA P-F
+
+Ubica el activo con precisión:
+* Zona P / Zona P-F activa / Cercano a F — ¿cuál exactamente y por qué?
+* ¿La degradación es LINEAL o ACELERADA? Usa los 7 puntos para justificar.
+* ¿El sistema ya pasó el punto óptimo de intervención? ¿Cuánto margen queda en la ventana P-F?
+
+## 3. ANÁLISIS DE TENDENCIA Y VELOCIDAD DE DEGRADACIÓN
+
+Con la serie de 7 puntos:
+* Estima pendiente: cuantifica el cambio promedio por lectura y el cambio en la segunda mitad vs primera
+* Clasifica: ESTABLE / ACELERÁNDOSE / FUERA DE CONTROL — con justificación numérica
+* Proyecta tiempo a falla real (ajustado por tendencia observada, no solo RUL del modelo)
+* Entrega rango de incertidumbre: [mín–máx horas] con razón para la amplitud del rango
+
+## 4. EVALUACIÓN DE RIESGO OPERACIONAL
+
+Cuantifica probabilidad de falla en:
+* < 24 horas: ____%
+* 24–72 horas: ____%
+* > 72 horas: ____%
+
+Evalúa consecuencias:
+* Producción: pérdida directa en USD/hr ya conocida ($12,500/hr)
+* Seguridad: riesgo para personal clasificado BAJO / MEDIO / ALTO con criterio
+* Daño secundario: componentes específicos en riesgo si el rodamiento falla (eje, sello, carcasa, contaminación de proceso)
+
+Clasificación de riesgo global: BAJO / MEDIO / ALTO / CRÍTICO
+
+## 5. DECISIÓN OPERACIONAL
+
+Elige EXACTAMENTE UNA de estas tres. No hay cuarta opción:
+* CONTINUAR OPERACIÓN — con condiciones específicas (frecuencia de monitoreo, límites de parada automática)
+* PROGRAMAR MANTENIMIENTO — con fecha concreta (dentro de N horas, no "próximas semanas")
+* DETENCIÓN INMEDIATA — con protocolo de parada (gradual o emergencia)
+
+Prohibido: lenguaje ambiguo, múltiples opciones simultáneas, recomendaciones condicionales sin compromiso.
+Obligatorio: justificación técnica + económica en 3–5 líneas máximo.
+
+## 6. ANÁLISIS FINANCIERO
+
+Escenario A — Intervención ahora:
+* Costo rodamiento + MO + parada programada (8–16 hrs típico en equipos críticos)
+* Producción diferida durante intervención
+* COSTO TOTAL A: USD $____
+
+Escenario B — Operar hasta falla:
+* Horas estimadas a falla REAL (usar tendencia, no RUL teórico)
+* $12,500 × horas hasta falla = costo producción perdida
+* Factor daño colateral: elegir entre 2.0x–3.5x según severidad actual + justificación
+* Costo logística emergencia + horas extra personal
+* COSTO TOTAL B: USD $____
+
+Diferencial:
+* Delta B−A: USD $____
+* ROI intervención: (Delta / Costo A) × 100 = ____%
+* Break-even: ¿en cuántas horas de operación adicional se amortizaría la intervención?
+
+## 7. PLAN DE ACCIÓN TÉCNICO
+
+Entrega exactamente 3 acciones en este formato:
+* ACCIÓN 1 — [QUÉ hacer] / [CUÁNDO: hora concreta o plazo máximo] / [MÉTRICA que confirma éxito o deterioro]
+* ACCIÓN 2 — [QUÉ hacer] / [CUÁNDO] / [MÉTRICA]
+* ACCIÓN 3 — [QUÉ hacer] / [CUÁNDO] / [MÉTRICA]
+* Leading indicator principal: [variable] — monitorear cada [frecuencia]
+* Criterio de parada de emergencia no programada: si [variable] supera [valor], detención inmediata
+
+## 8. FORMATO DE SALIDA — ESTRUCTURA EXACTA Y OBLIGATORIA
+
+Responde con estas 7 secciones en este orden, usando estos encabezados exactos:
+
+1. RESUMEN EJECUTIVO
+(Máximo 5 líneas. Lo que un gerente lee en 60 segundos antes de tomar una decisión.)
+
+2. DIAGNÓSTICO TÉCNICO
+
+3. ANÁLISIS P-F Y TENDENCIA
+
+4. RIESGO OPERACIONAL
+
+5. DECISIÓN
+
+6. IMPACTO FINANCIERO
+
+7. PLAN DE ACCIÓN`;
+}
+
+// ── SNAPSHOT ENRIQUECIDO ─────────────────────────────────────────────────────
+function getCurrentSnapshot() {
+  const temp = tempHistory[tempHistory.length - 1];
+  const vib  = vibHistory[vibHistory.length - 1];
+  const pf   = Math.round(degradation * 100);
+  const rul  = estimateRUL(degradation);
+  const cond = getCondition(temp, vib, degradation);
+
+  // Calcular velocidad de cambio real (delta entre punto actual y hace 7 lecturas)
+  const pfArr = pfHistory.slice(-7).map(v => Math.round(v * 100));
+  const degRate = pfArr.length >= 2
+    ? Math.round(((pfArr[pfArr.length-1] - pfArr[0]) / pfArr.length) * 10) / 10
+    : 0;
+
+  const modeLabels = {
+    normal: 'NORMAL — Sin anomalías detectadas',
+    degrading: 'DEGRADACIÓN ACTIVA — Tendencia ascendente confirmada',
+    critical: 'CRÍTICO — Múltiples parámetros sobre umbral',
+    failure: 'PRE-FALLA — Detención requerida'
+  };
+
+  return {
+    temp, vib, pf, rul, cond,
+    thrTempWarn: THR.tempWarn, thrTempCrit: THR.tempCrit,
+    thrVibWarn: THR.vibWarn, thrVibCrit: THR.vibCrit,
+    thrPF: Math.round(THR.pfWarn * 100),
+    trend7: pfArr.join(', '),
+    degRate,
+    modeLabel: modeLabels[simMode] || simMode.toUpperCase()
+  };
+}
+
+// ── STREAMING GENERATOR ──────────────────────────────────────────────────────
+async function generateMemo(type) {
+  const apiKey = document.getElementById('api-key').value.trim();
+  if (!apiKey) {
+    showError('Ingresa tu API Key de Anthropic (sk-ant-...) en el campo de arriba para activar el motor de IA.');
+    return;
+  }
+
+  const snap = getCurrentSnapshot();
+  const userPrompt = buildUserPrompt(type, snap);
+  const memoId = 'memo-' + Date.now();
+  const outputEl = document.getElementById('ai-output');
+  document.getElementById('empty-state')?.remove();
+
+  const titles = {
+    status:    'Análisis de Estado Técnico Completo',
+    trend:     'Memorándum de Tendencia P-F',
+    stoporder: 'Orden de Detención Técnica',
+    financial: 'Análisis de Impacto Financiero'
+  };
+
+  const condLabels = { ok:'NORMAL', warn:'ALERTA', danger:'CRÍTICO' };
+
+  // Crear tarjeta con streaming cursor
+  const memoEl = document.createElement('div');
+  memoEl.className = 'memo-card';
+  memoEl.id = memoId;
+
+  const ts = new Date().toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'});
+  memoEl.innerHTML = `
+    <div class="memo-header">
+      <span>${titles[type]}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:9px;color:var(--muted)">${ts}</span>
+        <span class="tag ${snap.cond}">${condLabels[snap.cond]}</span>
+      </div>
+    </div>
+    <div class="memo-meta" id="${memoId}-meta"></div>
+    <div class="memo-body" id="${memoId}-body"><span class="stream-cursor">▋</span></div>
+  `;
+  outputEl.insertBefore(memoEl, outputEl.firstChild);
+  memoEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Meta line
+  const metaEl = document.getElementById(memoId + '-meta');
+  metaEl.innerHTML = `<span>T: ${snap.temp}°C</span><span>V: ${snap.vib}mm/s</span><span>P-F: ${snap.pf}%</span><span>RUL: ${snap.rul}h</span>`;
+
+  // Disable all buttons
+  ['btn-status','btn-trend','btn-stop','btn-fin'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+  });
+
+  const bodyEl = document.getElementById(memoId + '-body');
+  let accumulatedText = '';
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 2000,
+        stream: true,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userPrompt }]
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || `Error HTTP ${response.status}`);
+    }
+
+    // ── SSE Streaming parser ────────────────────────────────────────────────
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const evt = JSON.parse(data);
+          if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+            accumulatedText += evt.delta.text;
+            bodyEl.textContent = accumulatedText;
+            bodyEl.insertAdjacentHTML('beforeend', '<span class="stream-cursor">▋</span>');
+            // Auto-scroll if near bottom
+            if (outputEl.scrollHeight - outputEl.scrollTop < outputEl.clientHeight + 200) {
+              outputEl.scrollTop = outputEl.scrollHeight;
+            }
+          }
+        } catch(e) { /* skip malformed */ }
+      }
+    }
+
+    // Final — remove cursor
+    bodyEl.textContent = accumulatedText || '(Sin respuesta del modelo)';
+    addAlert('ok', `[IA] ${titles[type]} generado — ${accumulatedText.length} caracteres`);
+
+  } catch (err) {
+    bodyEl.textContent = '';
+    bodyEl.style.color = 'var(--danger)';
+    const isAuthErr = err.message.includes('401') || err.message.includes('authentication');
+    bodyEl.textContent = isAuthErr
+      ? `Error de autenticación: API Key inválida o expirada.\n\nVerifica que sea una clave válida de Anthropic (sk-ant-api03-...).\nObtén una en: console.anthropic.com`
+      : `Error: ${err.message}`;
+    addAlert('danger', `[IA] Error: ${err.message.slice(0, 60)}`);
+  } finally {
+    ['btn-status','btn-trend','btn-stop','btn-fin'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    });
+  }
+}
+
+function showError(msg) {
+  const outputEl = document.getElementById('ai-output');
+  document.getElementById('empty-state')?.remove();
+  const div = document.createElement('div');
+  div.className = 'memo-card';
+  div.innerHTML = `<div class="memo-body" style="color:var(--warn);padding:14px">${msg}</div>`;
+  outputEl.insertBefore(div, outputEl.firstChild);
+}
+
+// ═══════════════════════════════════════════════
+//  5. INIT
+// ═══════════════════════════════════════════════
+updateThresholds();
+addChartAnnotation(tempChart, [THR.tempWarn, THR.tempCrit], ['#f59e0b', '#ef4444']);
+addChartAnnotation(vibChart,  [THR.vibWarn,  THR.vibCrit],  ['#f59e0b', '#ef4444']);
+
+// Main loop — 1.5s interval
+setInterval(tick_update, 1500);
+</script>
+</body>
+</html>

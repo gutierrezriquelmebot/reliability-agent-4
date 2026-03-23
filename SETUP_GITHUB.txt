@@ -1,0 +1,108 @@
+# GUÍA DE SUBIDA A GITHUB
+# Emilio Gutiérrez Riquelme — reliability-agent-4
+# Ejecuta estos comandos en orden desde tu terminal
+
+# ─────────────────────────────────────────────
+# PASO 1 — Crear el repositorio en GitHub
+# ─────────────────────────────────────────────
+# Ve a: https://github.com/new
+# Configura así:
+#   Repository name:  reliability-agent-4
+#   Description:      Sistema de detección P-F con LLM para activos industriales críticos | Data Science + IA aplicada a industria
+#   Visibility:       Public
+#   README:           NO marcar (ya tienes el tuyo)
+#   .gitignore:       None
+#   License:          None (ya tienes el tuyo)
+# → Clic en "Create repository"
+
+# ─────────────────────────────────────────────
+# PASO 2 — Configurar Git en tu máquina (solo la primera vez)
+# ─────────────────────────────────────────────
+git config --global user.name "Emilio Gutiérrez Riquelme"
+git config --global user.email "TU_EMAIL@ejemplo.com"  # Reemplaza con tu email de GitHub
+
+# ─────────────────────────────────────────────
+# PASO 3 — Inicializar y subir el repositorio
+# ─────────────────────────────────────────────
+
+# Entra a la carpeta del proyecto (ajusta la ruta según donde guardaste los archivos)
+cd reliability-agent-4
+
+# Inicializar Git
+git init
+
+# Agregar todos los archivos
+git add .
+
+# Primer commit — mensaje profesional para el historial
+git commit -m "feat: initial release — Reliability Agent 4.0
+
+- Single-file dashboard with real-time P-F monitoring
+- Synthetic sensor dataset (temperature + vibration RMS)
+- Gaussian noise injection with anomaly simulation
+- 4 degradation modes: Normal → Failure Imminent
+- Interactive threshold controls (5 adjustable sliders)
+- Chart.js dynamic charts with annotation lines
+- Claude Sonnet 4.5 integration via Anthropic API
+- Principal Reliability Engineer system prompt (25+ yrs)
+- Unified 8-section analysis protocol
+- SSE streaming for real-time AI response
+- 4 memo types: Diagnosis · PF Trend · Stop Order · Financial A/B
+- Zero infrastructure: pure HTML, no server required"
+
+# Conectar con tu repositorio de GitHub
+git remote add origin https://github.com/gutierrezriquelmebot/reliability-agent-4.git
+
+# Subir
+git branch -M main
+git push -u origin main
+
+# ─────────────────────────────────────────────
+# PASO 4 — Activar GitHub Pages (demo en vivo)
+# ─────────────────────────────────────────────
+# En GitHub.com → tu repo → Settings → Pages
+#   Source: Deploy from a branch
+#   Branch: main / (root)
+#   → Save
+#
+# En 2-3 minutos tu demo estará en:
+# https://gutierrezriquelmebot.github.io/reliability-agent-4/
+#
+# IMPORTANTE: Renombra el HTML a index.html para que Pages lo sirva como raíz:
+mv reliability_agent_4.html index.html
+git add .
+git commit -m "docs: rename to index.html for GitHub Pages deployment"
+git push
+
+# ─────────────────────────────────────────────
+# PASO 5 — Configurar el repositorio en GitHub
+# ─────────────────────────────────────────────
+# En GitHub.com → tu repo → Settings (rueda de engranaje junto a About):
+#
+# Description:
+#   Sistema de monitoreo predictivo con LLM para rodamientos industriales. 
+#   Curva P-F en tiempo real + Principal Reliability Engineer IA. 
+#   Data Science aplicado a industria.
+#
+# Website:
+#   https://gutierrezriquelmebot.github.io/reliability-agent-4/
+#
+# Topics (etiquetas — muy importantes para que te encuentren):
+#   predictive-maintenance  machine-learning  industrial-iot  reliability-engineering
+#   llm  anthropic  claude  data-science  condition-monitoring  pf-curve
+#   javascript  chartjs  html  portfolio
+
+# ─────────────────────────────────────────────
+# COMANDOS ÚTILES PARA EL FUTURO
+# ─────────────────────────────────────────────
+
+# Cuando hagas cambios y quieras subirlos:
+git add .
+git commit -m "fix: descripción del cambio"
+git push
+
+# Ver historial de commits:
+git log --oneline
+
+# Ver estado de archivos:
+git status

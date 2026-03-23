@@ -1,0 +1,31 @@
+# ─── Sistema operativo ───────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ─── Editores e IDEs ─────────────────────────
+.vscode/
+.idea/
+*.suo
+*.user
+*.sublime-project
+*.sublime-workspace
+
+# ─── Archivos sensibles ───────────────────────
+.env
+.env.local
+*.key
+secrets.txt
+
+# ─── Logs ────────────────────────────────────
+*.log
+logs/
+
+# ─── Temporales ──────────────────────────────
+*.tmp
+*.bak
+*.swp
+*~
